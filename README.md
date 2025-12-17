@@ -170,7 +170,3 @@ django-service-layer/
 ```
 ## Support
 For issues and questions, please open an issue in the GitHub repository.
-
-## License
-
-[MIT](https://choosealicense.com/licenses/mit/)
