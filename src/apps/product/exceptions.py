@@ -1,9 +1,9 @@
-from src.core import BaseServiceException
+from core.service import BaseServiceError
 
 
-class NotEnoughBalance(BaseServiceException):
-    """User has not enough money on his balance"""
+class NotEnoughBalance(BaseServiceError):
+    """Not enough balance"""
 
 
-class ProductDoesNotExist(BaseServiceException):
-    """Product does not exist"""
+class ProductDoesNotExist(BaseServiceError):
+    """Product not found"""

@@ -1,0 +1,17 @@
+from rest_framework import status
+from rest_framework.response import Response
+from rest_framework.views import exception_handler
+
+from core.service import BaseServiceError
+
+
+def service_exception_handler(exc, context):
+    if isinstance(exc, BaseServiceError):
+        return Response(
+            data={
+                "error_message": exc.message,
+                "error_context": dict(**exc.context),
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    return exception_handler(exc, context)

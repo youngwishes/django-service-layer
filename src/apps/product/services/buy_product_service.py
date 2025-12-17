@@ -1,30 +1,33 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING
+
 from dataclasses import dataclass
+from typing import TYPE_CHECKING, final
 
-from src.core.service import BaseService, log_service_error
-
-from src.apps.product.exceptions import (
-    NotEnoughBalance,
-    ProductDoesNotExist,
-)
+from apps.product.exceptions import NotEnoughBalance, ProductDoesNotExist
+from apps.product.models import Product
+from core.service import log_service_error
 
 if TYPE_CHECKING:
-    from src.apps.customer.models import Customer
-    from src.apps.product.models import Product
+    from apps.customer.models import Customer
 
 
+@final
 @dataclass(kw_only=True, slots=True, frozen=True)
-class BuyProductService(BaseService):
+class BuyProductService:
     @log_service_error
-    def __call__(self, product_id: int, customer: Customer) -> dict:
-        try:
-            product = Product.objects.get(pk=product_id)
-        except Product.DoesNotExist:
-            raise ProductDoesNotExist(product_id=product_id, customer_id=customer.pk)
+    def __call__(self, *, product_id: int, customer: Customer) -> None:
+        product = Product.objects.filter(pk=product_id).first()
+        if product is None:
+            raise ProductDoesNotExist(
+                customer=dict(id=customer.pk),
+                product=dict(id=product_id),
+            )
 
         if customer.balance < product.price:
-            raise NotEnoughBalance(product_id=product_id, customer_id=customer.pk)
+            raise NotEnoughBalance(
+                customer=dict(id=customer.pk, balance=customer.balance),
+                product=dict(id=product.pk, price=product.price, name=product.title),
+            )
 
-        # other business logic...
-        return {"message": "Thank you for buying!"}
+        customer.balance -= product.price
+        customer.save(update_fields=["balance"])
