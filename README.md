@@ -33,6 +33,8 @@ def __call__(self, *, product_id: int, customer: Customer) -> None:
 ```
 4. Service Exception Handler - Transforms service errors into consistent API responses with proper HTTP status codes.
 ```python
+from rest_framework.views import exception_handler
+
 def service_exception_handler(exc, context):
     if isinstance(exc, BaseServiceError):
         return Response(
