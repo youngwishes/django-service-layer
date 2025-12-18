@@ -1,4 +1,4 @@
-# Easy Django Service Layer
+# EZ Django Service
 A clean, structured approach to organizing business logic in Django applications using a dedicated service layer with built-in error handling and logging.
 
 ## Overview
