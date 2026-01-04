@@ -5,8 +5,13 @@ class NotEnoughBalance(BaseServiceError):
     """Not enough balance"""
 
 
-class ProductDoesNotExist(BaseServiceError):
+class ProductNotFound(BaseServiceError):
     """Product not found"""
 
-class CustomerDoesNotExist(BaseServiceError):
-    """Please make sure that you created customer"""
+
+class ProductNotAvailable(BaseServiceError):
+    """Product not available now"""
+
+
+class OutOfStockError(BaseServiceError):
+    """Product is out of stock"""

@@ -12,6 +12,8 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 
 from pathlib import Path
 
+from pythonjsonlogger import json
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -50,7 +52,6 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
-    "config.middlewares.SimpleLogMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"
@@ -127,8 +128,6 @@ REST_FRAMEWORK = {
     ],
 }
 
-
-from pythonjsonlogger import json
 
 LOGGING = {
     "version": 1,

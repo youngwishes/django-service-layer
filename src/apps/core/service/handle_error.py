@@ -9,8 +9,8 @@ def service_exception_handler(exc, context):
     if isinstance(exc, BaseServiceError):
         return Response(
             data={
-                "error_message": exc.message,
-                "error_context": dict(**exc.context),
+                "error": exc.message,
+                "detail": dict(**exc.context),
             },
             status=status.HTTP_400_BAD_REQUEST,
         )
