@@ -29,7 +29,7 @@ def log_service_error(__call__: Callable) -> Callable:
                     "error_in": self.__class__.__name__,
                     "error_name": error.__class__.__name__,
                     "error_message": error.message,
-                    **error.context,
+                    "error_context": dict(**error.context),
                 },
             )
             raise error
