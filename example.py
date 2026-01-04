@@ -1,10 +1,11 @@
 import logging
-
 from dataclasses import dataclass
 from functools import wraps
-from typing import Any, Callable, final, Protocol
+from typing import Any, Callable, Protocol, final
 
-logger = logging.LoggerAdapter(logging.getLogger(__name__), extra={"tag": "service-layer"})
+logger = logging.LoggerAdapter(
+    logging.getLogger(__name__), extra={"tag": "service-layer"}
+)
 
 
 class BaseService(Protocol):
@@ -40,11 +41,15 @@ def log_service_error(__call__: Callable) -> Callable:
 
     return wrapper
 
+
 @final
 @dataclass(kw_only=True, slots=True, frozen=True)
 class BuyProductService:
+    balance: float
+    price: float
+
     @log_service_error
-    def __call__(self, balance: int, price: int) -> None:
-        if balance < price:
-            raise NotEnoughBalance(price=price, balance=balance)
+    def __call__(self) -> None:
+        if self.balance < self.price:
+            raise NotEnoughBalance(price=self.price, balance=self.balance)
         # ...any other business logic & checks...
