@@ -1,172 +1,287 @@
-# Django Service Layer
-A clean, structured approach to organizing business logic in Django applications using a dedicated service layer with built-in error handling and logging.
+# (Django) Service Layer — (D)SL
+![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white)
+![Django](https://img.shields.io/badge/Django-092E20?style=for-the-badge&logo=django&logoColor=white)
+![DRF](https://img.shields.io/badge/DRF-9C2B2B?style=for-the-badge&logo=django&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-2496ED?style=for-the-badge&logo=docker&logoColor=white)
+![ElasticSearch](https://img.shields.io/badge/Elasticsearch-005571?style=for-the-badge&logo=elasticsearch&logoColor=white)
+![Logstash](https://img.shields.io/badge/Logstash-005571?style=for-the-badge&logo=logstash&logoColor=white)
+![Kibana](https://img.shields.io/badge/Kibana-005571?style=for-the-badge&logo=kibana&logoColor=white)
 
-## Overview
-This repository demonstrates an implementation of the Service Layer pattern for Django REST Framework applications. The pattern separates business logic from views and models, promoting cleaner code organization, better testability, and consistent error handling.
+This repository provides a **structured and clean** architectural pattern for implementing a service layer in Django applications. It focuses on **separating business logic** from the view layer, promoting testability, and ensuring consistent, **structured error handling and logging.**
+
+The project demonstrates a sample e-commerce feature (`BuyProduct`) built with this pattern, complete with an integrated ELK stack (Elasticsearch, Logstash, Kibana) for log monitoring.
 
 ## Key Features
-- Protocol-based service design - All services follow a consistent interface
-- Self-documenting errors - Error messages use docstrings by default
-- Structured logging - Comprehensive error logging with full context
-- Clean separation - Business logic isolated from views and serializers
-- Type safety - Full type hints and dataclass support
+
+*   **Clean Separation of Concerns**: Isolates complex business logic into dedicated service classes, away from views and serializers.
+*   **Protocol-Based Design**: Services adhere to a simple, consistent `IService` protocol, making the architecture predictable.
+*   **Structured, Automatic Logging**: A decorator (`@log_service_error`) automatically catches and logs exceptions from services in a structured JSON format, ready for log aggregators.
+*   **Descriptive, Contextual Errors**: Custom exceptions carry both a human-readable message (using the class `__doc__` string by default) and a rich context dictionary for logging and debugging.
+*   **Consistent API Responses**: A custom DRF exception handler translates service errors into uniform `400 Bad Request` responses.
+*   **Type Safety**: Fully typed with modern Python features like `dataclasses` and `Protocol` for better maintainability and editor support.
+*   **Integrated Log Management**: Includes a `docker-compose.yml` configuration to run an ELK stack for collecting and visualizing structured logs in Kibana.
 
 ## Architecture
-1. Service Protocol
+
+The pattern is built upon a few core components found in `src/apps/core/service/`.
+
+### 1. The Service Protocol (`IService`)
+All services implement a simple, callable protocol. This ensures a consistent interface for executing business logic.
+
 ```python
+# src/apps/core/service/base.py
 class IService(Protocol):
     def __call__(self, **kwargs) -> Any:
         """Business logic here. Use only keyword arguments."""
 ```
-2. Base Service Error
+
+### 2. The Base Exception (`BaseServiceError`)
+Custom service exceptions inherit from this base class. It automatically uses the exception's docstring as the error message and captures contextual data.
+
 ```python
+# src/apps/core/service/base.py
 class BaseServiceError(Exception):
     def __init__(self, message: str = None, **context) -> None:
-        self.message = message or self.__doc__  # Uses docstring as default message
-        self.context = context  # Additional error context for logging/response
+        self.message = message or self.__doc__
+        self.context = context
 ```
-3. Error logging decorator
-```python
-@log_service_error
-def __call__(self, *, product_id: int, customer: Customer) -> None:
-    # Business logic with automatic error logging
-```
-4. Service Exception Handler - Transforms service errors into consistent API responses with proper HTTP status codes.
-```python
-from rest_framework.views import exception_handler
 
+### 3. The Logging Decorator (`@log_service_error`)
+This decorator wraps the service's `__call__` method, providing a `try...except` block that logs any `BaseServiceError` in a structured format before re-raising it.
+
+```python
+# src/apps/core/service/base.py
+def log_service_error(__call__: Callable) -> Callable:
+    @wraps(__call__)
+    def wrapper(self, **kwargs) -> Any:
+        try:
+            return __call__(self, **kwargs)
+        except BaseServiceError as error:
+            logger.error(
+                {
+                    "error_in": self.__class__.__name__,
+                    "error_name": error.__class__.__name__,
+                    "error_message": error.message,
+                    **error.context,
+                },
+            )
+            raise error
+
+    return wrapper
+```
+
+### 4. The DRF Exception Handler
+This handler, configured in `settings.py`, intercepts any `BaseServiceError` that bubbles up to the view layer and formats it into a consistent JSON response.
+
+```python
+# src/apps/core/service/handle_error.py
 def service_exception_handler(exc, context):
     if isinstance(exc, BaseServiceError):
         return Response(
             data={
-                "error_message": exc.message,
-                "error_context": dict(**exc.context),
+                "error": exc.message,
+                "detail": dict(**exc.context),
             },
             status=status.HTTP_400_BAD_REQUEST,
         )
     return exception_handler(exc, context)
 ```
-## Usage example
-1. Create a service
+
+## How It Works: A Practical Example
+
+Let's follow the flow of a user buying a product.
+
+### 1. Define DTOs and Custom Exceptions
+Data Transfer Objects (DTOs) define the data structures for service inputs and outputs. We also define specific exceptions for our business domain.
+
 ```python
+# src/apps/product/services/dtos/buy_product_dto.py
+@dataclass(kw_only=True, frozen=True, slots=True)
+class BuyProductIn(BaseServiceDTO):
+    id: int
+    count: int
+
+# src/apps/product/exceptions.py
+class NotEnoughBalance(BaseServiceError):
+    """Not enough balance"""
+
+class ProductNotFound(BaseServiceError):
+    """Product not found"""
+```
+
+### 2. Create the Service
+The service is a `dataclass` containing the business logic. It takes a DTO and the customer model, performs checks, and raises exceptions with context if something goes wrong.
+
+```python
+# src/apps/product/services/buy_product_service.py
+@final
 @dataclass(kw_only=True, slots=True, frozen=True)
 class BuyProductService:
+    product: BuyProductIn
+    customer: Customer
+
     @log_service_error
-    def __call__(self, *, product_id: int, customer: Customer) -> None:
-        product = Product.objects.filter(pk=product_id).first()
+    def __call__(self) -> BuyProductOut:
+        product = Product.objects.filter(pk=self.product.id).first()
         if product is None:
-            raise ProductDoesNotExist(
-                customer=dict(id=customer.pk),
-                product=dict(id=product_id),
+            raise ProductNotFound(
+                product=dict(id=self.product.id, count=self.product.count),
+            )
+
+        if not self._is_customer_can_buy_product(product=product):
+            raise NotEnoughBalance(
+                product=dict(id=self.product.id, count=self.product.count, price=product.price),
+                customer=dict(id=self.customer.pk, balance=self.customer.balance),
             )
         
-        # Business logic here
-```
-2. Define custom exceptions
-```python
-class ProductDoesNotExist(BaseServiceError):
-    """Product does not exist."""
+        return self._buy(product=product)
 
-class NotEnoughBalance(BaseServiceError):
-    """Customer does not have enough balance."""
+    @transaction.atomic
+    def _buy(self, *, product: Product) -> BuyProductOut:
+        # ... logic to decrease balance and product count ...
 ```
-3. Use in Django View
+
+### 3. Use in the View
+The Django view becomes very simple. Its only responsibilities are validating the request, calling the service, and returning the result.
+
 ```python
+# src/apps/product/views.py
 class BuyProductView(APIView):
+    permission_classes = (CustomerRequired,)
+
     def post(self, request: Request) -> Response:
-        # Validation
         serializer = BuyProductSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
-        
-        # Business logic
-        BuyProductService()(
+
+        result = BuyProductService(
+            product=BuyProductIn(
+                id=data.get("id"),
+                count=data.get("count"),
+            ),
             customer=request.user.customer,
-            product_id=data.get("product_id"),
-        )
+        )()
 
         return Response(
-            data={"message": "Thank you for buying!"},
+            data=result.asdict(),
             status=status.HTTP_200_OK,
         )
 ```
-## Error handling
-Automatic Logging
-Service errors are automatically logged with:
 
-- Error location (class name)
-- Error type
-- Error message
-- Full context data
+### 4. Error Handling in Action
+If the `BuyProductService` raises `NotEnoughBalance`, two things happen automatically:
 
-## API Response Format
-Service errors return structured responses:
-```json
-{
-    "error_message": "Customer does not have enough balance.",
-    "error_context": {
-        "customer": {"id": 1, "balance": 50.00},
-        "product": {"id": 5, "price": 99.99, "name": "Premium Product"}
+1.  **Structured Log:** The `@log_service_error` decorator sends a JSON log to Logstash:
+    ```json
+    {
+      "@timestamp": "...",
+      "message": {
+        "error_in": "BuyProductService",
+        "error_name": "NotEnoughBalance",
+        "error_message": "Not enough balance",
+        "product": { "id": 1, "count": 1, "price": 500 },
+        "customer": { "id": 2, "balance": 100 }
+      },
+      "source": "django-app"
     }
-}
-```
-## Benefits
-### ✅ Clean Code Organization
-- Business logic separated from HTTP layer
-- Services are testable in isolation
-- Consistent interface across all services
+    ```
+2.  **API Response:** The `service_exception_handler` returns a clean error response to the client:
+    ```json
+    {
+        "error": "Not enough balance",
+        "detail": {
+            "product": {
+                "id": 1,
+                "count": 1,
+                "price": 500
+            },
+            "customer": {
+                "id": 2,
+                "balance": 100
+            }
+        }
+    }
+    ```
 
-### ✅ Better Error Handling
-- Self-documenting error messages
-- Structured error context
-- Automatic logging
+## Getting Started
 
-### ✅ Type Safety
-- Full type hints support
-- Dataclass-based service containers
-- Protocol enforcement
+### Prerequisites
+*   Python 3.14+
+*   [Docker](https://www.docker.com/get-started) and Docker Compose
+*   [uv](https://github.com/astral-sh/uv) (for package management)
 
-### ✅ Performance
-- slots=True for memory efficiency
-- frozen=True for immutability
-- kw_only=True for explicit keyword arguments
+### Installation
+1.  **Clone the repository:**
+    ```bash
+    git clone https://github.com/youngwishes/django-service-layer.git
+    cd django-service-layer
+    ```
+2.  **Start the logging stack (ELK):**
+    ```bash
+    docker-compose up -d
+    ```
+    This will start Elasticsearch, Logstash, and Kibana.
+    *   Kibana will be available at `http://localhost:5601`.
+    *   Elasticsearch will be available at `http://localhost:9200`.
+
+3.  **Install Python dependencies:**
+    ```bash
+    uv sync
+    ```
+4.  **Set up the database:**
+    ```bash
+    python src/manage.py migrate
+    ```
+5.  **Create a superuser to access the admin panel:**
+    ```bash
+    python src/manage.py createsuperuser
+    ```
+6.  **Run the Django development server:**
+    ```bash
+    python src/manage.py runserver
+    ```
+    The API will be available at `http://127.0.0.1:8000`.
+
+### Populating Data and Logs
+1.  Log into the Django admin at `http://127.0.0.1:8000/admin/` and create:
+    *   A few `Product` instances with varying prices and counts.
+    *   Two `User` instances.
+    *   Two `Customer` instances linked to the users, with different balances.
+    *   Authentication tokens for the users (in the `authtoken` section).
+2.  Copy `utils/.env.example` to `utils/.env` and fill in the API tokens for your test users.
+3.  Run the log population script to simulate API calls and generate error logs:
+    ```bash
+    python utils/populate_kibana_logs.py
+    ```
+4.  **View logs in Kibana:**
+    *   Navigate to `http://localhost:5601`.
+    *   Go to **Management > Stack Management > Index Patterns** and create an index pattern named `django-logs-*`.
+    *   Go to **Analytics > Discover** to view and search the structured logs.
 
 ## Project Structure
 ```text
 django-service-layer/
-├── src/                          
-│   ├── apps/                    
-│   │   ├── customer/             
-│   │   │   ├── migrations/
-│   │   │   ├── __init__.py
-│   │   │   ├── admin.py
-│   │   │   ├── apps.py
-│   │   │   └── models.py        
-│   │   └── product/              
-│   │       ├── migrations/
+├── src/
+│   ├── apps/
+│   │   ├── core/
+│   │   │   └── service/            # Core service layer components
+│   │   │       ├── base.py         # IService, BaseServiceError, decorator
+│   │   │       ├── handle_error.py # DRF exception handler
+│   │   │       └── dtos.py
+│   │   ├── customer/               # Customer app
+│   │   └── product/                # Product app
+│   │       ├── exceptions.py       # Custom domain exceptions
+│   │       ├── services/           # Business logic services
+│   │       │   └── buy_product_service.py
 │   │       ├── serializers/
-│   │       ├── services/
-│   │       ├── __init__.py
-│   │       ├── admin.py
-│   │       ├── apps.py
-│   │       ├── exceptions.py
-│   │       ├── models.py         
-│   │       ├── urls.py
-│   │       └── views.py 
-│   ├── config/
-│   │   ├── __init__.py
-│   │   ├── asgi.py
-│   │   ├── settings.py
-│   │   ├── urls.py
-│   │   └── wsgi.py
-│   ├── core/
-│   │   └── service
+│   │       └── views.py
+│   ├── config/                     # Django project settings
 │   └── manage.py
-├── .gitignore
-├── example.py
-├── pyproject.toml        
-├── README.md
-└── uv.lock
+├── docker-compose.yml              # ELK stack configuration
+├── logstash.conf                   # Logstash pipeline configuration
+├── pyproject.toml
+└── README.md
 ```
-## Support
-For issues and questions, please open an issue in the GitHub repository.
+
+## License
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
