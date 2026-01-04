@@ -3,7 +3,7 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.product.dtos import BuyProductIn
+from apps.product.services.dtos import BuyProductIn
 from apps.product.permissions import CustomerRequired
 from apps.product.serializers import BuyProductSerializer
 from apps.product.services import BuyProductService

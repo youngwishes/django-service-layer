@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, final
 from django.db import transaction
 
 from apps.core.service import log_service_error
-from apps.product.dtos import BuyProductIn, BuyProductOut
+from apps.product.services.dtos import BuyProductIn, BuyProductOut
 from apps.product.exceptions import (
     NotEnoughBalance,
     OutOfStockError,
