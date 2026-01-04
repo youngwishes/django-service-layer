@@ -50,6 +50,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "config.middlewares.SimpleLogMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"
@@ -120,8 +121,35 @@ USE_TZ = True
 STATIC_URL = "static/"
 
 REST_FRAMEWORK = {
-    "EXCEPTION_HANDLER": "core.service.service_exception_handler",
+    "EXCEPTION_HANDLER": "apps.core.service.service_exception_handler",
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "rest_framework.authentication.TokenAuthentication",
     ],
+}
+
+
+from pythonjsonlogger import json
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "json": {
+            "()": json.JsonFormatter,
+        },
+    },
+    "handlers": {
+        "logstash": {
+            "class": "logstash.TCPLogstashHandler",
+            "host": "localhost",
+            "port": 5514,
+            "version": 1,
+        },
+    },
+    "loggers": {
+        "apps": {
+            "handlers": ["logstash"],
+            "level": "INFO",
+        }
+    },
 }

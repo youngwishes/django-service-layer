@@ -3,9 +3,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, final
 
-from apps.product.exceptions import NotEnoughBalance, ProductDoesNotExist
+from apps.product.exceptions import NotEnoughBalance, ProductDoesNotExist, CustomerDoesNotExist
 from apps.product.models import Product
-from core.service import log_service_error
+from apps.core.service import log_service_error
 
 if TYPE_CHECKING:
     from apps.customer.models import Customer
@@ -16,6 +16,11 @@ if TYPE_CHECKING:
 class BuyProductService:
     @log_service_error
     def __call__(self, *, product_id: int, customer: Customer) -> None:
+        if not customer:
+            raise CustomerDoesNotExist(
+                product_id=product_id,
+            )
+
         product = Product.objects.filter(pk=product_id).first()
         if product is None:
             raise ProductDoesNotExist(

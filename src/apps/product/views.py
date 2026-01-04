@@ -14,7 +14,7 @@ class BuyProductView(APIView):
         data = serializer.validated_data
 
         BuyProductService()(
-            customer=request.user.customer,
+            customer=getattr(request.user, "customer", None),
             product_id=data.get("product_id"),
         )
 

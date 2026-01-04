@@ -6,4 +6,6 @@ readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
     "django-rest-framework>=0.1.0",
+    "python-json-logger>=4.0.0",
+    "python-logstash>=0.4.8",
 ]

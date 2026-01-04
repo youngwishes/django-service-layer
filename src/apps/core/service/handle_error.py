@@ -2,7 +2,7 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import exception_handler
 
-from core.service import BaseServiceError
+from apps.core.service import BaseServiceError
 
 
 def service_exception_handler(exc, context):

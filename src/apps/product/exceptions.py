@@ -1,4 +1,4 @@
-from core.service import BaseServiceError
+from apps.core.service import BaseServiceError
 
 
 class NotEnoughBalance(BaseServiceError):
@@ -7,3 +7,6 @@ class NotEnoughBalance(BaseServiceError):
 
 class ProductDoesNotExist(BaseServiceError):
     """Product not found"""
+
+class CustomerDoesNotExist(BaseServiceError):
+    """Please make sure that you created customer"""

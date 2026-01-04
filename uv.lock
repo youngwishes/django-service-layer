@@ -40,10 +40,16 @@ version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "django-rest-framework" },
+    { name = "python-json-logger" },
+    { name = "python-logstash" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "django-rest-framework", specifier = ">=0.1.0" }]
+requires-dist = [
+    { name = "django-rest-framework", specifier = ">=0.1.0" },
+    { name = "python-json-logger", specifier = ">=4.0.0" },
+    { name = "python-logstash", specifier = ">=0.4.8" },
+]
 
 [[package]]
 name = "djangorestframework"
@@ -56,6 +62,21 @@ sdist = { url = "https://files.pythonhosted.org/packages/8a/95/5376fe618646fde68
 wheels = [
     { url = "https://files.pythonhosted.org/packages/b0/ce/bf8b9d3f415be4ac5588545b5fcdbbb841977db1c1d923f7568eeabe1689/djangorestframework-3.16.1-py3-none-any.whl", hash = "sha256:33a59f47fb9c85ede792cbf88bde71893bcda0667bc573f784649521f1102cec", size = 1080442, upload-time = "2025-08-06T17:50:50.667Z" },
 ]
+
+[[package]]
+name = "python-json-logger"
+version = "4.0.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/29/bf/eca6a3d43db1dae7070f70e160ab20b807627ba953663ba07928cdd3dc58/python_json_logger-4.0.0.tar.gz", hash = "sha256:f58e68eb46e1faed27e0f574a55a0455eecd7b8a5b88b85a784519ba3cff047f", size = 17683, upload-time = "2025-10-06T04:15:18.984Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/51/e5/fecf13f06e5e5f67e8837d777d1bc43fac0ed2b77a676804df5c34744727/python_json_logger-4.0.0-py3-none-any.whl", hash = "sha256:af09c9daf6a813aa4cc7180395f50f2a9e5fa056034c9953aec92e381c5ba1e2", size = 15548, upload-time = "2025-10-06T04:15:17.553Z" },
+]
+
+[[package]]
+name = "python-logstash"
+version = "0.4.8"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/f7/3b/c3a957bbdd23859f07905fc3d1adfe89957217a347478c58409f0315cf1d/python-logstash-0.4.8.tar.gz", hash = "sha256:d04e1ce11ecc107e4a4f3b807fc57d96811e964a554081b3bbb44732f74ef5f9", size = 7074, upload-time = "2022-03-30T11:58:04.095Z" }
 
 [[package]]
 name = "sqlparse"
