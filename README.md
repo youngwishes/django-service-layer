@@ -162,6 +162,9 @@ The Django view becomes very simple. Its only responsibilities are validating th
 
 ```python
 # src/apps/product/views.py
+class BuyProductView(APIView):
+    permission_classes = (CustomerRequired,)
+
     def post(self, request: Request) -> Response:
         serializer = BuyProductSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -175,6 +178,7 @@ The Django view becomes very simple. Its only responsibilities are validating th
             data=result.asdict(),
             status=status.HTTP_200_OK,
         )
+
 ```
 
 ### 4. Error Handling in Action
