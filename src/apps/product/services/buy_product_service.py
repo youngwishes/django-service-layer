@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING, final
 from django.db import transaction
 
 from apps.core.service import log_service_error
-from apps.product.services.dtos import BuyProductIn, BuyProductOut
 from apps.product.exceptions import (
     NotEnoughBalance,
     OutOfStockError,
@@ -14,6 +13,8 @@ from apps.product.exceptions import (
     ProductNotFound,
 )
 from apps.product.models import Product
+from apps.product.services.dtos import BuyProductIn, BuyProductOut
+from config.container import container
 
 if TYPE_CHECKING:
     from apps.customer.models import Customer
@@ -23,10 +24,9 @@ if TYPE_CHECKING:
 @dataclass(kw_only=True, slots=True, frozen=True)
 class BuyProductService:
     product: BuyProductIn
-    customer: Customer
 
     @log_service_error
-    def __call__(self) -> BuyProductOut:
+    def __call__(self, *, customer: Customer) -> BuyProductOut:
         product = Product.objects.filter(pk=self.product.id).first()
         if product is None:
             raise ProductNotFound(
@@ -39,27 +39,34 @@ class BuyProductService:
             )
         if not product.is_available:
             raise ProductNotAvailable(
-                product=dict(id=self.product.id, count=self.product.count),
+                product=dict(id=product.pk, count=self.product.count),
             )
-        if not self._is_customer_can_buy_product(product=product):
+        if customer.can_buy_max_count_of(product) < self.product.count:
             raise NotEnoughBalance(
-                product=dict(id=self.product.id, count=self.product.count, price=product.price),
-                customer=dict(id=self.customer.pk, balance=self.customer.balance),
+                product=dict(id=product.pk, count=product.count, price=product.price),
+                customer=dict(id=customer.pk, balance=customer.balance),
             )
-        return self._buy(product=product)
-
-    def _is_customer_can_buy_product(self, *, product: Product) -> bool:
-        total_price = product.calculate_total_price(self.product.count)
-        return self.customer.balance > total_price
+        return self._buy(product=product, customer=customer)
 
     @transaction.atomic
-    def _buy(self, *, product: Product) -> BuyProductOut:
-        self.customer.balance -= product.calculate_total_price(self.product.count)
-        self.customer.save(update_fields=["balance"])
+    def _buy(self, *, product: Product, customer: Customer) -> BuyProductOut:
+        customer.balance -= product.calculate_total_price(self.product.count)
+        customer.save(update_fields=["balance"])
         product.count -= self.product.count
         product.save(update_fields=["count"])
+        self._send_sms()
         return BuyProductOut(
             product=self.product.id,
             count=self.product.count,
-            balance=self.customer.balance,
+            balance=customer.balance,
         )
+
+    def _send_sms(self) -> None:
+        container.resolve("SendSmsService")()
+
+
+def buy_product_service_factory(product: dict) -> BuyProductService:
+    return BuyProductService(product=BuyProductIn(**product))
+
+
+container.register("BuyProductService", factory=buy_product_service_factory)

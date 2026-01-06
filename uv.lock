@@ -76,6 +76,7 @@ dependencies = [
     { name = "django-rest-framework" },
     { name = "django-stubs" },
     { name = "djangorestframework-stubs" },
+    { name = "punq" },
     { name = "python-dotenv" },
     { name = "python-json-logger" },
     { name = "python-logstash" },
@@ -86,6 +87,7 @@ requires-dist = [
     { name = "django-rest-framework", specifier = ">=0.1.0" },
     { name = "django-stubs", specifier = ">=5.2.8" },
     { name = "djangorestframework-stubs", specifier = ">=3.16.6" },
+    { name = "punq", specifier = ">=0.7.0" },
     { name = "python-dotenv", specifier = ">=1.2.1" },
     { name = "python-json-logger", specifier = ">=4.0.0" },
     { name = "python-logstash", specifier = ">=0.4.8" },
@@ -154,6 +156,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/6f/6d/0703ccc57f3a7233505399edb88de3cbd678da106337b9fcde432b65ed60/idna-3.11.tar.gz", hash = "sha256:795dafcc9c04ed0c1fb032c2aa73654d8e8c5023a7df64a53f39190ada629902", size = 194582, upload-time = "2025-10-12T14:55:20.501Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/0e/61/66938bbb5fc52dbdf84594873d5b51fb1f7c7794e9c0f5bd885f30bc507b/idna-3.11-py3-none-any.whl", hash = "sha256:771a87f49d9defaf64091e6e6fe9c18d4833f140bd19464795bc32d966ca37ea", size = 71008, upload-time = "2025-10-12T14:55:18.883Z" },
+]
+
+[[package]]
+name = "punq"
+version = "0.7.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/e6/f1/c31e86ce1ab85837d8e6a6868163bae3afaef01c49d45f1bfa479c1a5b90/punq-0.7.0.tar.gz", hash = "sha256:bb7a6cc75a2e7d51b861b0e11f4830a12617b3ee33dbced9ce2be6a98ba39d63", size = 7254, upload-time = "2023-11-06T10:45:19.945Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/92/6a/c89602766d4416371eb801c3de89eda45fcea4435836ba7c01d1da88d47a/punq-0.7.0-py3-none-any.whl", hash = "sha256:7e0aca446c36a73674ec3fc078ec5e90e7a172ee349537d075ff20d73c3b1810", size = 7719, upload-time = "2023-11-06T10:45:18.118Z" },
 ]
 
 [[package]]

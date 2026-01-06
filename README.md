@@ -20,7 +20,7 @@ The project demonstrates a sample e-commerce feature (`BuyProduct`) built with t
 *   **Consistent API Responses**: A custom DRF exception handler translates service errors into uniform `400 Bad Request` responses.
 *   **Type Safety**: Fully typed with modern Python features like `dataclasses` and `Protocol` for better maintainability and editor support.
 *   **Integrated Log Management**: Includes a `docker-compose.yml` configuration to run an ELK stack for collecting and visualizing structured logs in Kibana.
-
+  *   **Dependency Injection**: We use [**punq**](https://github.com/bobthemighty/punq) as **easy and clean DI library.**
 ## Architecture
 
 The pattern is built upon a few core components found in `src/apps/core/service/`.
@@ -111,56 +111,65 @@ class ProductNotFound(BaseServiceError):
 
 ### 2. Create the Service
 The service is a `dataclass` containing the business logic. It takes a DTO and the customer model, performs checks, and raises exceptions with context if something goes wrong.
-
+You should put django orm instances into `__call__` method.
 ```python
 # src/apps/product/services/buy_product_service.py
 @final
 @dataclass(kw_only=True, slots=True, frozen=True)
 class BuyProductService:
     product: BuyProductIn
-    customer: Customer
 
     @log_service_error
-    def __call__(self) -> BuyProductOut:
+    def __call__(self, *, customer: Customer) -> BuyProductOut:
         product = Product.objects.filter(pk=self.product.id).first()
         if product is None:
             raise ProductNotFound(
                 product=dict(id=self.product.id, count=self.product.count),
             )
-
-        if not self._is_customer_can_buy_product(product=product):
-            raise NotEnoughBalance(
-                product=dict(id=self.product.id, count=self.product.count, price=product.price),
-                customer=dict(id=self.customer.pk, balance=self.customer.balance),
+        if product.count < self.product.count:
+            raise OutOfStockError(
+                product=dict(id=product.pk, count=product.count),
+                order=dict(id=product.pk, count=self.product.count),
             )
-        
-        return self._buy(product=product)
+        if not product.is_available:
+            raise ProductNotAvailable(
+                product=dict(id=product.pk, count=self.product.count),
+            )
+        if customer.can_buy_max_count_of(product) < self.product.count:
+            raise NotEnoughBalance(
+                product=dict(id=product.pk, count=product.count, price=product.price),
+                customer=dict(id=customer.pk, balance=customer.balance),
+            )
+        return self._buy(product=product, customer=customer)
 
     @transaction.atomic
-    def _buy(self, *, product: Product) -> BuyProductOut:
+    def _buy(self, *, product: Product, customer: Customer) -> BuyProductOut:
         # ... logic to decrease balance and product count ...
-```
 
+```
+#### 2.1 Using Punq as DI framework
+You should use function-based factories to create your services.
+```python
+# src/apps/product/services/buy_product_service.py
+def buy_product_service_factory(product: dict) -> BuyProductService:
+    return BuyProductService(product=BuyProductIn(**product))
+
+
+container.register("BuyProductService", factory=buy_product_service_factory)
+```
 ### 3. Use in the View
-The Django view becomes very simple. Its only responsibilities are validating the request, calling the service, and returning the result.
+The Django view becomes very simple. Its only responsibilities are validating the request, calling the service via **punq container**, and returning the result.
 
 ```python
 # src/apps/product/views.py
-class BuyProductView(APIView):
-    permission_classes = (CustomerRequired,)
-
     def post(self, request: Request) -> Response:
         serializer = BuyProductSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        data = serializer.validated_data
 
-        result = BuyProductService(
-            product=BuyProductIn(
-                id=data.get("id"),
-                count=data.get("count"),
-            ),
-            customer=request.user.customer,
-        )()
+        result = container.resolve(
+            "BuyProductService",
+            product=serializer.validated_data,
+        )(customer=request.user.customer)
 
         return Response(
             data=result.asdict(),
