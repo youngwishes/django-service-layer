@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, final
 
 from django.db import transaction
 
-from apps.core.service import log_service_error
+from apps.core.service import log_service_error, BaseServiceError
 from apps.product.exceptions import (
     NotEnoughBalance,
     OutOfStockError,
@@ -18,12 +18,14 @@ from config.container import container
 
 if TYPE_CHECKING:
     from apps.customer.models import Customer
+    from apps.product.services import SendCRMService
 
 
 @final
 @dataclass(kw_only=True, slots=True, frozen=True)
 class BuyProductService:
     product: BuyProductIn
+    crm_sender: SendCRMService
 
     @log_service_error
     def __call__(self, *, customer: Customer) -> BuyProductOut:
@@ -54,19 +56,26 @@ class BuyProductService:
         customer.save(update_fields=["balance"])
         product.count -= self.product.count
         product.save(update_fields=["count"])
-        self._send_sms()
+        self._send_to_crm()
         return BuyProductOut(
             product=self.product.id,
             count=self.product.count,
             balance=customer.balance,
         )
 
-    def _send_sms(self) -> None:
-        container.resolve("SendSmsService")()
+    def _send_to_crm(self) -> None:
+        try:
+            self.crm_sender()
+        except BaseServiceError:
+            ...
+            # some side effects
 
 
 def buy_product_service_factory(product: dict) -> BuyProductService:
-    return BuyProductService(product=BuyProductIn(**product))
+    return BuyProductService(
+        product=BuyProductIn(**product),
+        crm_sender=container.resolve(SendCRMService),
+    )
 
 
 container.register("BuyProductService", factory=buy_product_service_factory)
