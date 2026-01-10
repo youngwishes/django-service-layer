@@ -74,7 +74,7 @@ class BuyProductService:
 def buy_product_service_factory(product: dict) -> BuyProductService:
     return BuyProductService(
         product=BuyProductIn(**product),
-        crm_sender=container.resolve(SendCRMService),
+        crm_sender=container.resolve("SendCRMService"),
     )
 
 
