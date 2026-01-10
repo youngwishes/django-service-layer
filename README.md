@@ -7,7 +7,7 @@
 ![Logstash](https://img.shields.io/badge/Logstash-005571?style=for-the-badge&logo=logstash&logoColor=white)
 ![Kibana](https://img.shields.io/badge/Kibana-005571?style=for-the-badge&logo=kibana&logoColor=white)
 
-This repository provides a **structured and clean** architectural pattern for implementing a service layer in Django applications. It focuses on **separating business logic** from the view layer, promoting testability, and ensuring consistent, **structured error handling and logging.**
+This repository provides a structured and clean architectural pattern for implementing a service layer in Django applications. It focuses on separating business logic from the view layer, promoting testability, and ensuring consistent, structured error handling and logging.
 
 The project demonstrates a sample e-commerce feature (`BuyProduct`) built with this pattern, complete with an integrated ELK stack (Elasticsearch, Logstash, Kibana) for log monitoring.
 
@@ -20,12 +20,14 @@ The project demonstrates a sample e-commerce feature (`BuyProduct`) built with t
 *   **Consistent API Responses**: A custom DRF exception handler translates service errors into uniform `400 Bad Request` responses.
 *   **Type Safety**: Fully typed with modern Python features like `dataclasses` and `Protocol` for better maintainability and editor support.
 *   **Integrated Log Management**: Includes a `docker-compose.yml` configuration to run an ELK stack for collecting and visualizing structured logs in Kibana.
-  *   **Dependency Injection**: We use [**punq**](https://github.com/bobthemighty/punq) as **easy and clean DI library.**
+*   **Dependency Injection**: Uses [**punq**](https://github.com/bobthemighty/punq) for simple and clean dependency injection, managed through a central container.
+
 ## Architecture
 
 The pattern is built upon a few core components found in `src/apps/core/service/`.
 
 ### 1. The Service Protocol (`IService`)
+
 All services implement a simple, callable protocol. This ensures a consistent interface for executing business logic.
 
 ```python
@@ -36,6 +38,7 @@ class IService(Protocol):
 ```
 
 ### 2. The Base Exception (`BaseServiceError`)
+
 Custom service exceptions inherit from this base class. It automatically uses the exception's docstring as the error message and captures contextual data.
 
 ```python
@@ -47,6 +50,7 @@ class BaseServiceError(Exception):
 ```
 
 ### 3. The Logging Decorator (`@log_service_error`)
+
 This decorator wraps the service's `__call__` method, providing a `try...except` block that logs any `BaseServiceError` in a structured format before re-raising it.
 
 ```python
@@ -71,6 +75,7 @@ def log_service_error(__call__: Callable) -> Callable:
 ```
 
 ### 4. The DRF Exception Handler
+
 This handler, configured in `settings.py`, intercepts any `BaseServiceError` that bubbles up to the view layer and formats it into a consistent JSON response.
 
 ```python
@@ -92,7 +97,8 @@ def service_exception_handler(exc, context):
 Let's follow the flow of a user buying a product.
 
 ### 1. Define DTOs and Custom Exceptions
-Data Transfer Objects (DTOs) define the data structures for service inputs and outputs. We also define specific exceptions for our business domain.
+
+Data Transfer Objects (DTOs) define the data structures for service inputs. We also define specific exceptions for our business domain.
 
 ```python
 # src/apps/product/services/dtos/buy_product_dto.py
@@ -110,55 +116,45 @@ class ProductNotFound(BaseServiceError):
 ```
 
 ### 2. Create the Service
-The service is a `dataclass` containing the business logic. It takes a DTO and the customer model, performs checks, and raises exceptions with context if something goes wrong.
-You should put django orm instances into `__call__` method.
+
+The service is a `dataclass` that contains the business logic. It performs checks and raises exceptions with context if something goes wrong. Dependencies like `SendCRMService` are injected upon instantiation.
+
 ```python
 # src/apps/product/services/buy_product_service.py
 @final
 @dataclass(kw_only=True, slots=True, frozen=True)
 class BuyProductService:
     product: BuyProductIn
+    crm_sender: SendCRMService
 
     @log_service_error
     def __call__(self, *, customer: Customer) -> BuyProductOut:
-        product = Product.objects.filter(pk=self.product.id).first()
-        if product is None:
-            raise ProductNotFound(
-                product=dict(id=self.product.id, count=self.product.count),
-            )
-        if product.count < self.product.count:
-            raise OutOfStockError(
-                product=dict(id=product.pk, count=product.count),
-                order=dict(id=product.pk, count=self.product.count),
-            )
-        if not product.is_available:
-            raise ProductNotAvailable(
-                product=dict(id=product.pk, count=self.product.count),
-            )
+        # ... business logic ...
         if customer.can_buy_max_count_of(product) < self.product.count:
             raise NotEnoughBalance(
                 product=dict(id=product.pk, count=product.count, price=product.price),
                 customer=dict(id=customer.pk, balance=customer.balance),
             )
+        # ...
         return self._buy(product=product, customer=customer)
-
-    @transaction.atomic
-    def _buy(self, *, product: Product, customer: Customer) -> BuyProductOut:
-        # ... logic to decrease balance and product count ...
-
 ```
-#### 2.1 Using Punq as DI framework
-You should use function-based factories to create your services.
+
+Dependencies are registered with the `punq` container using factory functions.
+
 ```python
 # src/apps/product/services/buy_product_service.py
 def buy_product_service_factory(product: dict) -> BuyProductService:
-    return BuyProductService(product=BuyProductIn(**product))
-
+    return BuyProductService(
+        product=BuyProductIn(**product),
+        crm_sender=container.resolve("SendCRMService"),
+    )
 
 container.register("BuyProductService", factory=buy_product_service_factory)
 ```
+
 ### 3. Use in the View
-The Django view becomes very simple. Its only responsibilities are validating the request, calling the service via **punq container**, and returning the result.
+
+The Django view becomes very simple. Its only responsibilities are validating the request, resolving and calling the service via the `punq` container, and returning the result.
 
 ```python
 # src/apps/product/views.py
@@ -178,10 +174,10 @@ class BuyProductView(APIView):
             data=result.asdict(),
             status=status.HTTP_200_OK,
         )
-
 ```
 
 ### 4. Error Handling in Action
+
 If the `BuyProductService` raises `NotEnoughBalance`, two things happen automatically:
 
 1.  **Structured Log:** The `@log_service_error` decorator sends a JSON log to Logstash:
@@ -192,8 +188,10 @@ If the `BuyProductService` raises `NotEnoughBalance`, two things happen automati
         "error_in": "BuyProductService",
         "error_name": "NotEnoughBalance",
         "error_message": "Not enough balance",
-        "product": { "id": 1, "count": 1, "price": 500 },
-        "customer": { "id": 2, "balance": 100 }
+        "error_context": {
+          "product": { "id": 1, "count": 1, "price": 500 },
+          "customer": { "id": 2, "balance": 100 }
+        }
       },
       "source": "django-app"
     }
@@ -219,11 +217,13 @@ If the `BuyProductService` raises `NotEnoughBalance`, two things happen automati
 ## Getting Started
 
 ### Prerequisites
-*   Python 3.14+
+
+*   Python 3.12+
 *   [Docker](https://www.docker.com/get-started) and Docker Compose
 *   [uv](https://github.com/astral-sh/uv) (for package management)
 
 ### Installation
+
 1.  **Clone the repository:**
     ```bash
     git clone https://github.com/youngwishes/django-service-layer.git
@@ -256,6 +256,7 @@ If the `BuyProductService` raises `NotEnoughBalance`, two things happen automati
     The API will be available at `http://127.0.0.1:8000`.
 
 ### Populating Data and Logs
+
 1.  Log into the Django admin at `http://127.0.0.1:8000/admin/` and create:
     *   A few `Product` instances with varying prices and counts.
     *   Two `User` instances.
@@ -268,10 +269,11 @@ If the `BuyProductService` raises `NotEnoughBalance`, two things happen automati
     ```
 4.  **View logs in Kibana:**
     *   Navigate to `http://localhost:5601`.
-    *   Go to **Management > Stack Management > Index Patterns** and create an index pattern named `django-logs-*`.
-    *   Go to **Analytics > Discover** to view and search the structured logs.
+    *   Go to **Management > Stack Management > Index Management**. You should see the `django-logs-clean` index.
+    *   Go to **Analytics > Discover** to view and search the structured logs. Logstash may take a moment to process the initial logs.
 
 ## Project Structure
+
 ```text
 django-service-layer/
 ├── src/
@@ -280,15 +282,17 @@ django-service-layer/
 │   │   │   └── service/            # Core service layer components
 │   │   │       ├── base.py         # IService, BaseServiceError, decorator
 │   │   │       ├── handle_error.py # DRF exception handler
-│   │   │       └── dtos.py
-│   │   ├── customer/               # Customer app
-│   │   └── product/                # Product app
+│   │   │       └── dtos.py         # Base DTO
+│   │   ├── customer/
+│   │   └── product/
 │   │       ├── exceptions.py       # Custom domain exceptions
 │   │       ├── services/           # Business logic services
+│   │       │   ├── dtos/
 │   │       │   └── buy_product_service.py
 │   │       ├── serializers/
 │   │       └── views.py
 │   ├── config/                     # Django project settings
+│   │   └── container.py            # Dependency Injection container
 │   └── manage.py
 ├── docker-compose.yml              # ELK stack configuration
 ├── logstash.conf                   # Logstash pipeline configuration
@@ -297,4 +301,5 @@ django-service-layer/
 ```
 
 ## License
+
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
